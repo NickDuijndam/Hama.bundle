@@ -5,6 +5,7 @@
 ### Imports ###               ### Functions used ###
 # Python Modules #
 import os                     # path.abspath, join, dirname
+import json                   #
 import time                   # datetime.datetime.now() 
 import re                     # sub
 import logging                #
@@ -38,7 +39,7 @@ FieldListMovies   = ('original_title', 'title', 'title_sort', 'roles', 'studio',
 FieldListSeries   = ('title', 'title_sort', 'originally_available_at', 'duration','rating',  'reviews', 'collections', 'genres', 'tags' , 'summary', 'extras', 'countries', 'rating_count',
                      'content_rating', 'studio', 'countries', 'posters', 'banners', 'art', 'themes', 'roles', 'original_title', 
                      'rating_image', 'audience_rating', 'audience_rating_image')  # Not in Framework guide 2.1.1, in https://github.com/plexinc-agents/TheMovieDb.bundle/blob/master/Contents/Code/__init__.py
-FieldListSeasons  = ('summary','posters', 'art')  #'summary', 
+FieldListSeasons  = ('summary', 'posters', 'art', 'title')
 FieldListEpisodes = ('title', 'summary', 'originally_available_at', 'writers', 'directors', 'producers', 'guest_stars', 'rating', 'thumbs', 'duration', 'content_rating', 'content_rating_age', 'absolute_index') #'titleSort
 SourceList        = ('AniDB', 'MyAnimeList', 'FanartTV', 'OMDb', 'TheTVDB', 'TheMovieDb', 'Plex', 'AnimeLists', 'tvdb4', 'TVTunes', 'Local', 'AniList') #"Simkl", 
 Movie_to_Serie_US_rating = {"G"    : "TV-Y7", "PG"   : "TV-G", "PG-13": "TV-PG", "R"    : "TV-14", "R+"   : "TV-MA", "Rx"   : "NC-17"}
@@ -721,6 +722,49 @@ def UpdateMeta(metadata, media, movie, MetaSources, mappingList):
         else:
           if not Dict(count, field) and Dict(Prefs, field)!="None" and source_list:  Log.Info("[#] {field:<29}  Sources: {sources:<60}  Inside: {source_list}".format(field=field, sources='' if field=='seasons' else Prefs[field], source_list=source_list))
       
+      if (metadata.seasons[season].summary or metadata.seasons[season].title) and season not in ['-1', '0']:
+        headers = {"Accept": "application/json", "X-Plex-Token": os.environ["PLEXTOKEN"]}
+        fields_to_update = {}
+        if metadata.seasons[season].title:
+          fields_to_update["title"] = metadata.seasons[season].title
+        if metadata.seasons[season].summary:
+          fields_to_update["summary"] = metadata.seasons[season].summary
+
+        # Get library ID
+        section_id = json.loads(HTTP.Request(
+          url='http://localhost:32400/library/metadata/{}'.format(media.seasons[season].id), 
+          cacheTime=0, 
+          immediate=True, 
+          headers=headers,
+        ).content)['MediaContainer']['librarySectionID']
+
+        # Remove locked fields from the update array
+        locked_fields = json.loads(HTTP.Request(
+          url='{}{}/common?type=3&id={}'.format(PLEX_LIBRARY_URL, section_id, media.seasons[season].id), 
+          immediate=True, 
+          cacheTime=0, 
+          headers=headers,
+        ).content)['MediaContainer']['Metadata'][0]
+
+        if 'Field' in locked_fields:
+          for locked_field in locked_fields['Field']:
+            if locked_field['locked'] and fields_to_update[locked_field['name']]:
+              del fields_to_update[locked_field['name']]
+
+        if fields_to_update:
+          update_string = ""
+          for k, v in fields_to_update.iteritems():
+            update_string += "&{}.value={}".format(k, urllib2.quote(v))
+
+          # Update all season fields
+          HTTP.Request(
+            url='{}{}/all?type=3&id={}{}'.format(PLEX_LIBRARY_URL, section_id, media.seasons[season].id, update_string), 
+            method='PUT',
+            immediate=True,
+            cacheTime=0,
+            headers=headers,
+          )
+
       ### Episodes ###
       languages = Prefs['EpisodeLanguagePriority'].replace(' ', '').split(',')
       for episode in sorted(media.seasons[season].episodes, key=natural_sort_key):

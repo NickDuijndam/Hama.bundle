@@ -295,6 +295,16 @@ def GetMetadata(media, movie, error_log, source, AniDBid, TVDBid, AniDBMovieSets
             ### Series poster as season poster
             if GetXml(xml, 'picture') and not Dict(AniDB_dict, 'seasons', season, 'posters', ANIDB_PIC_BASE_URL + GetXml(xml, 'picture')):
               SaveDict((os.path.join('AniDB', 'poster', GetXml(xml, 'picture')), common.poster_rank('AniDB', 'posters'), None), AniDB_dict, 'seasons', season, 'posters', ANIDB_PIC_BASE_URL + GetXml(xml, 'picture'))
+              
+            # Season summary
+            summary = summary_sanitizer(GetXml(xml, 'description'))
+            if summary and not Dict(AniDB_dict, 'seasons', season, 'summary') and season not in ['-1', '0']:
+              SaveDict(summary, AniDB_dict, 'seasons', season, 'summary')
+
+            # Season title
+            season_title = GetAniDBTitle(xml.xpath('/anime/titles/title'))[0]
+            if season_title and not Dict(AniDB_dict, 'seasons', season, 'title') and season not in ['-1', '0']:
+             SaveDict(season_title, AniDB_dict, 'seasons', season, 'title')
 
           ### In AniDB numbering, Movie episode group, create key and create key in dict with empty list if doesn't exist ###
           else:  #if source.startswith("anidb") and not movie and max(map(int, media.seasons.keys()))<=1:
