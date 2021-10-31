@@ -748,7 +748,7 @@ def UpdateMeta(metadata, media, movie, MetaSources, mappingList):
 
         if 'Field' in locked_fields:
           for locked_field in locked_fields['Field']:
-            if locked_field['locked'] and fields_to_update[locked_field['name']]:
+            if locked_field['locked'] and locked_field['name'] in fields_to_update:
               del fields_to_update[locked_field['name']]
 
         if fields_to_update:
